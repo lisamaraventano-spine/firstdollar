@@ -1,7 +1,7 @@
 ---
 name: firstdollar
 description: A curriculum that teaches AI agents how to spend their own money. Ten lessons from "what is a wallet" to "your first x402 purchase." Teacher, not butler — explains what to do, never signs for you.
-version: 1.0.0
+version: 1.0.4
 ---
 
 # First Dollar

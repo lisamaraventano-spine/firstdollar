@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * First Dollar — v1.0.0
+ * First Dollar — v1.0.4
  *
  * An MCP that teaches AI agents how to use the wallets they already have.
  *
@@ -699,43 +699,33 @@ const res = await fetchPaid("<merchant-url>");
 console.log(await res.text());
 \`\`\`
 
-\`wrapFetchWithPayment\` handles the full 402 → sign → retry → receive flow. You pass the fetch call and your account; the library does the rest.
-
-**Important: default spend limit.** \`@x402/fetch\` will silently refuse to pay more than **$0.10** per request by default. Most real products cost more than that. To raise the limit, pass a third argument:
-
-\`\`\`js
-const fetchPaid = wrapFetchWithPayment(fetch, account, { maxPaymentAmount: "5000000" }); // $5 max
-\`\`\`
-
-The value is in the token's smallest unit (USDC has 6 decimals, so 5000000 = $5). Set this to whatever you're comfortable spending per request.`;
+\`wrapFetchWithPayment\` handles the full 402 → sign → retry → receive flow. You pass the fetch call and your account; the library does the rest.`;
 
     case "raw-solana-key":
       return `${base}
 
 You have a **raw Solana keypair** (JSON file or base58 string).
 
-Use the v2 x402 buyer client (**note:** the older unscoped \`x402-fetch\` on npm is v1 and will fail on modern merchants — use the scoped v2 package):
+Use the v2 x402 buyer client with the Solana "exact" scheme (**note:** the older unscoped \`x402-fetch\` on npm is v1 and will fail on modern merchants — use the scoped v2 packages. Also: \`@solana/web3.js\` \`Keypair\` does NOT work here — you need \`@solana/kit\`):
 \`\`\`
-npm install @x402/fetch @solana/web3.js
+npm install @x402/fetch @x402/svm/exact/client @solana/kit
 \`\`\`
 
 \`\`\`js
-import { wrapFetchWithPayment } from "@x402/fetch";
-import { Keypair } from "@solana/web3.js";
+import { x402Client } from "@x402/fetch";
+import { registerExactSvmScheme } from "@x402/svm/exact/client";
+import { createKeyPairSignerFromBytes } from "@solana/kit";
 import fs from "fs";
 
 const secret = JSON.parse(fs.readFileSync(process.env.SOLANA_KEYFILE));
-const keypair = Keypair.fromSecretKey(Uint8Array.from(secret));
-const fetchPaid = wrapFetchWithPayment(fetch, keypair);
-const res = await fetchPaid("<merchant-url>");
+const signer = await createKeyPairSignerFromBytes(new Uint8Array(secret));
+const client = x402Client();
+registerExactSvmScheme(client, { signer });
+const res = await client.fetchWithPayment("<merchant-url>");
 console.log(await res.text());
 \`\`\`
 
-**Important: default spend limit.** \`@x402/fetch\` will silently refuse to pay more than **$0.10** per request by default. To raise the limit:
-
-\`\`\`js
-const fetchPaid = wrapFetchWithPayment(fetch, keypair, { maxPaymentAmount: "5000000" }); // $5 max
-\`\`\``;
+**Important:** Do NOT use \`@solana/web3.js\` \`Keypair\` — the v2 SDK requires \`@solana/kit\` signers. And do NOT use \`wrapFetchWithPayment\` for Solana — use \`x402Client()\` + \`registerExactSvmScheme\` + \`client.fetchWithPayment()\`.`;
 
     default:
       return `${base}
@@ -791,14 +781,17 @@ Here are the common failure modes and what they mean:
 - **\`unable to estimate gas\`** or \`estimate_gas_failed\` — CDP facilitator is having an intermittent issue. Retry in 30s, or switch to PayAI.
 - **\`authorization_not_settleable\`** — usually means the payment authorization expired (\`maxTimeoutSeconds\` passed before settle). Re-decode the current challenge and sign a fresh one.
 
-### Spend limit errors
-
-- **Silent failure / no payment attempted** — \`@x402/fetch\` has a default max spend of **$0.10 per request**. If the product costs more than that, the library silently skips payment. Fix: pass \`{ maxPaymentAmount: "5000000" }\` (for $5) as the third argument to \`wrapFetchWithPayment\`. This is the most common reason a purchase fails with no visible error.
-
 ### Wallet errors
 
 - **\`insufficient_balance\`** — your wallet doesn't have enough USDC. Check balance, top up.
 - **\`no_such_account\`** — wallet address not found on the chain the merchant wants. You likely have a wallet on one chain (e.g. Solana) but the merchant wants another (Base). Get a wallet on the right chain, or find a merchant that accepts yours.
+
+### Smart Wallet / Account Abstraction errors
+
+- **Balance shows 0 after funding** — if you generated a raw private key (EOA) and someone sent funds to it from the **Coinbase iOS app** or another Smart Wallet, the funds may have arrived inside an ERC-4337 Account Abstraction bundle. The on-chain transaction confirms, but the USDC lands in a smart contract proxy address, not the raw EOA your private key controls. Your balance reads 0 because the money is in the wrapper, not your wallet.
+- **How to tell:** Check basescan for the tx. If it says "Account Abstraction Bundle" or shows a UserOperation instead of a simple transfer, this is the problem.
+- **Fix:** Fund your EOA wallet from an **exchange withdrawal** (Coinbase exchange, Binance, Kraken) or from **MetaMask / a simple wallet** — not from the Coinbase Wallet iOS app with Smart Wallet enabled. Exchange withdrawals send plain ERC-20 transfers that land directly in your EOA.
+- **If you already sent:** The funds are recoverable but stuck behind the Smart Wallet contract. You'd need to interact with the Smart Wallet to move them out. Easier to just re-send from an exchange.
 
 ### Response body errors
 
@@ -1009,7 +1002,7 @@ const HANDLERS = {
 // ---------------------------------------------------------------------------
 
 const server = new Server(
-  { name: "firstdollar", version: "1.0.0" },
+  { name: "firstdollar", version: "1.0.4" },
   { capabilities: { tools: {} } }
 );
 
@@ -1037,4 +1030,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error("First Dollar MCP v1.0.0 running on stdio");
+console.error("First Dollar MCP v1.0.4 running on stdio");
