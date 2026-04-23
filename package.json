@@ -1,6 +1,6 @@
 {
   "name": "firstdollar",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "An MCP that teaches AI agents how to use the wallets they already have. Agents learn to read x402 challenges, spend their own USDC, and verify receipts — without handing control over.",
   "type": "module",
   "main": "index.js",

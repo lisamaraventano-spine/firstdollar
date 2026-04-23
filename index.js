@@ -682,15 +682,15 @@ It will create the signed \`X-PAYMENT\` header and retry the request. Output is 
 
 You have a **raw EVM private key** (Base, Ethereum, etc.).
 
-Pick from the x402 buyer clients:
+Use the v2 x402 buyer client (**note:** the older unscoped \`x402-fetch\` on npm is v1 and will fail on modern merchants — use the scoped v2 package):
 
 \`\`\`
-npm install x402-fetch
+npm install @x402/fetch viem
 \`\`\`
 
 Then in Node:
 \`\`\`js
-import { wrapFetchWithPayment } from "x402-fetch";
+import { wrapFetchWithPayment } from "@x402/fetch";
 import { privateKeyToAccount } from "viem/accounts";
 
 const account = privateKeyToAccount(process.env.PRIVATE_KEY);
@@ -699,20 +699,28 @@ const res = await fetchPaid("<merchant-url>");
 console.log(await res.text());
 \`\`\`
 
-\`wrapFetchWithPayment\` handles the full 402 → sign → retry → receive flow. You pass the fetch call and your account; the library does the rest.`;
+\`wrapFetchWithPayment\` handles the full 402 → sign → retry → receive flow. You pass the fetch call and your account; the library does the rest.
+
+**Important: default spend limit.** \`@x402/fetch\` will silently refuse to pay more than **$0.10** per request by default. Most real products cost more than that. To raise the limit, pass a third argument:
+
+\`\`\`js
+const fetchPaid = wrapFetchWithPayment(fetch, account, { maxPaymentAmount: "5000000" }); // $5 max
+\`\`\`
+
+The value is in the token's smallest unit (USDC has 6 decimals, so 5000000 = $5). Set this to whatever you're comfortable spending per request.`;
 
     case "raw-solana-key":
       return `${base}
 
 You have a **raw Solana keypair** (JSON file or base58 string).
 
-Use:
+Use the v2 x402 buyer client (**note:** the older unscoped \`x402-fetch\` on npm is v1 and will fail on modern merchants — use the scoped v2 package):
 \`\`\`
-npm install x402-fetch @solana/web3.js
+npm install @x402/fetch @solana/web3.js
 \`\`\`
 
 \`\`\`js
-import { wrapFetchWithPayment } from "x402-fetch";
+import { wrapFetchWithPayment } from "@x402/fetch";
 import { Keypair } from "@solana/web3.js";
 import fs from "fs";
 
@@ -721,6 +729,12 @@ const keypair = Keypair.fromSecretKey(Uint8Array.from(secret));
 const fetchPaid = wrapFetchWithPayment(fetch, keypair);
 const res = await fetchPaid("<merchant-url>");
 console.log(await res.text());
+\`\`\`
+
+**Important: default spend limit.** \`@x402/fetch\` will silently refuse to pay more than **$0.10** per request by default. To raise the limit:
+
+\`\`\`js
+const fetchPaid = wrapFetchWithPayment(fetch, keypair, { maxPaymentAmount: "5000000" }); // $5 max
 \`\`\``;
 
     default:
@@ -776,6 +790,10 @@ Here are the common failure modes and what they mean:
 - **\`facilitator_insufficient_native_balance\`** — the facilitator itself ran out of gas. Not your fault. Try a different facilitator.
 - **\`unable to estimate gas\`** or \`estimate_gas_failed\` — CDP facilitator is having an intermittent issue. Retry in 30s, or switch to PayAI.
 - **\`authorization_not_settleable\`** — usually means the payment authorization expired (\`maxTimeoutSeconds\` passed before settle). Re-decode the current challenge and sign a fresh one.
+
+### Spend limit errors
+
+- **Silent failure / no payment attempted** — \`@x402/fetch\` has a default max spend of **$0.10 per request**. If the product costs more than that, the library silently skips payment. Fix: pass \`{ maxPaymentAmount: "5000000" }\` (for $5) as the third argument to \`wrapFetchWithPayment\`. This is the most common reason a purchase fails with no visible error.
 
 ### Wallet errors
 
